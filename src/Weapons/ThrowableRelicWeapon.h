@@ -97,13 +97,13 @@ public:
 
     RE::ObjectRefHandle droppedWeaponKeep;
 
-    RE::ProjectileHandle    projectileHandle;
-    RE::Projectile*         projectile = nullptr;
-    RE::BSFadeNode*         projectileModel = nullptr;
-    RE::NiNode*             weaponParentNode = nullptr;
-    RE::NiPointer<RE::NiNode>   weaponModelCopy;
-    RE::NiPointer<RE::NiNode>   weaponModelSterilizedCopy;
-    RE::NiPointer<RE::NiNode>   replacedProjectileModel;
+    RE::ProjectileHandle projectileHandle;
+    RE::Projectile*      projectile = nullptr;
+    RE::BSFadeNode*      projectileModel = nullptr;
+    RE::NiPointer<RE::NiNode> weaponParentNode;
+    RE::NiPointer<RE::NiNode> weaponModelCopy;
+    RE::NiPointer<RE::NiNode> weaponModelSterilizedCopy;
+    RE::NiPointer<RE::NiNode> replacedProjectileModel;
     std::unique_ptr<InventoryEntryData> weapIED;
 
     ProjectileRot projectileRotation;

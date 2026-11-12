@@ -191,7 +191,7 @@ void ThrowableRelicWeapon::InitiateModel() noexcept
     if (!_modelInitiated) {
         if (projectileModel && projectile && projectile->Get3D() && weaponModelCopy && projectileModel == projectile->Get3D()) {
             auto weaponParentBone = projectileModel->GetChildren()[0];//->GetObjectByName(projectileAttachNodeName);
-            weaponParentNode = weaponParentBone ? weaponParentBone->AsNode() : nullptr;
+            weaponParentNode.reset(weaponParentBone ? weaponParentBone->AsNode() : nullptr);
 
             replacedProjectileModel = std::move(weaponModelSterilizedCopy);
 
@@ -351,7 +351,7 @@ void ThrowableRelicWeapon::RemoveTrail()
                     replacedProjectileModel->parent->DetachChild(replacedProjectileModel.get());
                     replacedProjectileModel->parent = nullptr;
                 }
-                weaponParentNode = nullptr;
+                weaponParentNode.reset();
                 replacedProjectileModel.reset();
             }
         }
@@ -550,6 +550,7 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
     if (a_actor && a_actor->IsValid()) {
         if (GetThrowState() != ThrowState::kArrived) {
             RemoveTrail();
+            weaponParentNode.reset();
             replacedProjectileModel.reset();
         }
         projectile = projectileHandle.get().get();

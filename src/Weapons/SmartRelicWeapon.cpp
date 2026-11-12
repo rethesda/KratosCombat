@@ -303,9 +303,9 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
                     auto weaponBone = callerParent->GetWeaponBone();
                     if (animObjectR && animObjectR->AsNode() && weaponBone && weaponParentNode) {
                         if (animObjectR == weaponParentNode->parent) {
-                            animObjectR->AsNode()->DetachChild(weaponParentNode);
+                            animObjectR->AsNode()->DetachChild(weaponParentNode.get());
                         }
-                        animObjectR->AsNode()->AttachChild(weaponParentNode);
+                        animObjectR->AsNode()->AttachChild(weaponParentNode.get());
                         weaponParentNode->local.translate = RE::NiPoint3();
                         auto& localRotation = weaponParentNode->local.rotate;
                         const auto& desiredParentWorldRotate = weaponBone->world.rotate;
@@ -486,15 +486,11 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
 void SmartRelicWeapon::OnTrailDelete()
 {
     if (weaponParentNode) {
-        auto animObjectRBone = callerParent ? callerParent->GetAnimObjectRBone() : nullptr;
-        auto animObjectRNode = animObjectRBone ? animObjectRBone->AsNode() : nullptr;
-        if (animObjectRNode && weaponParentNode->parent == animObjectRNode) {
-            animObjectRNode->DetachChild(weaponParentNode);
-        }
         if (weaponParentNode->parent) {
-            weaponParentNode->parent->DetachChild(weaponParentNode);
+            weaponParentNode->parent->DetachChild(weaponParentNode.get());
             weaponParentNode->parent = nullptr;
         }
+        weaponParentNode.reset();
     }
 }
 
