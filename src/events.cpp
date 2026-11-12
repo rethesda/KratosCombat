@@ -4,6 +4,7 @@
 #ifdef KRATOS_COMBAT_3
     #include "Assets.h"
     #include "RelicManager.h"
+    #include "Actors/Capabilities/Thrower.h"
 #else
     #include "MainKratosCombat.h"
     using RageType = Kratos::Rage;
@@ -98,25 +99,22 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             player->StopWeaponCharging();
             break;
         case "MjolnirChargeStart"_h:
-        //    player->ChargeWeaponStart();
+            if (auto assets = Assets::GetSingleton(); assets && player->GetActor()) {
+                auto rHandBone = player->GetRHandBone();
+                if (auto handEffect = assets->VFXeffects.handShock; handEffect && rHandBone)
+                    player->GetActor()->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone, false);
+                if (auto soundEffect = assets->soundEffects.chargeLevi; soundEffect && rHandBone)
+                    ObjectUtil::Sound::PlaySound(soundEffect, rHandBone, 5.f);
+            }
             break;
         case "MjolnirCharge1"_h:
-        //    player->ChargeWeapon();
-    //        if (auto manager = Kratos::GetSingleton(); manager && manager->IsCanCharge(PlayerCharacter::GetSingleton(), RelicType::kMjolnir))
-    //            if (auto mjolnir = Mjolnir::GetSingleton())
-    //                mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 1u, -1);
+            player->ChargeWeapon(1u);
             break;
         case "MjolnirCharge2"_h:
-        //    player->ChargeWeapon();
-    //        if (auto manager = Kratos::GetSingleton(); manager && manager->IsCanCharge(PlayerCharacter::GetSingleton(), RelicType::kMjolnir))
-    //            if (auto mjolnir = Mjolnir::GetSingleton())
-    //                mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 2u, -1);
+            player->ChargeWeapon(2u);
             break;
         case "MjolnirCharge3"_h:
-        //    player->ChargeWeapon();
-    //        if (auto manager = Kratos::GetSingleton(); manager && manager->IsCanCharge(PlayerCharacter::GetSingleton(), RelicType::kMjolnir))
-    //            if (auto mjolnir = Mjolnir::GetSingleton())
-    //                mjolnir->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 3u, -1);
+            player->ChargeWeapon(3u);
             break;
 //        case "MjolnirChargeEnd"_h:
         //    player->ChargeEnd();
@@ -154,13 +152,14 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
             player->EndRage(true);
             break;
         case "RageFinish"_h:
-            player->EndRage(true);
+            player->EndRage(true, false);
             break;
         case "weaponDraw"_h:
         //    player->WeaponDrawEvent();
             break;
         case "weaponSwing"_h:
-            player->RestoreRage(360.f, true);
+            if (player->IsInRage())
+                player->RestoreRage(360.f, true);
             break;
     //    case "CastOKStart"_h:
         case "MCO_AttackInitiate"_h:
@@ -168,19 +167,10 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "MCO_SprintAttackInitiate"_h:
         case "MCO_SprintPowerAttackInitiate"_h:
         case "Bfco_AttackStartFX"_h:
-        //    player->OnAttackStart();
-    //        if (auto manager = Kratos::GetSingleton(); manager && manager->IsInRage())
-    //            manager->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*manager->values.rageDamageAmount * 0.25f, false);
-    //        if (WeaponIdentify::isLeviathanAxe) {
-    //            if (auto Levi = LeviathanAxe::GetSingleton()) {
-    //                Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag);
-    //            }
-    //        }
-    //        else if (WeaponIdentify::isMjolnir) {
-    //            if (auto mjolnir = Mjolnir::GetSingleton()) {
-    //                mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag);
-    //            }
-    //        }
+            if (player->IsInRage())
+                player->RestoreRageDirect(-(Config::RageDamageRate->value * 0.25f), false);
+            if (auto rHandRelic = player->GetRightHandRelic())
+                rHandRelic->ResetCharge(rHandRelic->enchMag, rHandRelic->defaultEnchMag);
             break;
         case "AttackWinStart"_h:
         case "MCO_WinOpen"_h:
@@ -188,19 +178,10 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "BFCO_NextWinStart"_h:
         case "BFCO_NextPowerWinStart"_h:
         case "Collision_AttackEnd"_h:
-        //    player->OnAttackEnd();
-    //        if (auto manager = Kratos::GetSingleton(); manager && manager->IsInRage())
-    //            manager->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*manager->values.rageDamageAmount * 0.25f, false);
-    //        if (WeaponIdentify::isLeviathanAxe) {
-    //            if (auto Levi = LeviathanAxe::GetSingleton()) {
-    //                Levi->ResetCharge(Levi->data.enchMag, Levi->data.defaultEnchMag, true);
-    //            }
-    //        }
-    //        else if (WeaponIdentify::isMjolnir) {
-    //            if (auto mjolnir = Mjolnir::GetSingleton()) {
-    //                mjolnir->ResetCharge(mjolnir->data.enchMag, mjolnir->data.defaultEnchMag, true);
-    //            }
-    //        }
+            if (player->IsInRage())
+                player->RestoreRageDirect(-(Config::RageDamageRate->value * 0.25f), false);
+            if (auto rHandRelic = player->GetRightHandRelic())
+                rHandRelic->ResetCharge(rHandRelic->enchMag, rHandRelic->defaultEnchMag, true);
             break;
         case "InsertDraupnir"_h:
             player->ThrowWeapon(RotationType::kNone, ThrowType::kMelee);
@@ -251,18 +232,12 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "attackStop"_h:
         case "IdleStop"_h:
         case "CastOKStop"_h:
+            if (player->IsInRage())
+                player->RestoreRageDirect(-(Config::RageDamageRate->value * 0.25f), false);
             if (Config::IsAdvancedThrowingInstalled) {
                 player->StopChargingThrow();
             }
         //    player->OnCombatReadyStateStart();
-//            if (auto manager = Kratos::GetSingleton(); manager && manager->IsInRage())
-//                manager->RestoreRage(RE::PlayerCharacter::GetSingleton(), -*manager->values.rageDamageAmount * 0.25f, false);
-//            if (WeaponIdentify::unequipWhenAnimEnds) {
-//                if (auto AnArchos = PlayerCharacter::GetSingleton(); AnArchos) {
-//                    ObjectUtil::Actor::UnEquipItem(AnArchos, false, false, true, true, WeaponIdentify::skipEquipAnim, false);
-//                    ObjectUtil::Actor::ResetEquipAnimationAfter(100, AnArchos);
-//                } WeaponIdentify::unequipWhenAnimEnds = false;
-//            }
 #ifdef EXPERIMENTAL_SHIELD
             //  animated shield
             ObjectUtil::Actor::SendAnimationEvent(PlayerCharacter::GetSingleton(), "shieldClose");
@@ -274,7 +249,14 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "throwAttackReady"_h:
         case "throwPowerAttackReady"_h:
             if (Config::IsAdvancedThrowingInstalled) {
-                player->StartChargingThrow();
+                if (auto thrower = player->GetRightHandRelic() ? player->GetCapabilityAs<Thrower>() : nullptr; thrower && thrower->IsThrowing()) {
+                    bool isChargingThrow = false;
+                    if (auto anArchos = player->GetActor(); anArchos) {
+                        anArchos->GetGraphVariableBool("bIsPressingAttackButton", isChargingThrow);
+                        if (!isChargingThrow) anArchos->GetGraphVariableBool("bIsPressingPowerAttackButton", isChargingThrow);
+                    }
+                    if (isChargingThrow) player->StartChargingThrow();
+                }
             }
             break;
         case "throwAttackEndStart"_h:
@@ -287,7 +269,7 @@ EventChecker AnimationEventTracker::ProcessEvent(const BSAnimationGraphEvent* a_
         case "FootRight"_h:
         case "PickNewIdle"_h:
             if (player->IsInRage())
-                player->RestoreRage(Config::RageDamageRate->value * 0.25f, false);
+                player->RestoreRageDirect(-(Config::RageDamageRate->value * 0.25f), false);
             break;
         }
     }
@@ -763,11 +745,11 @@ EventChecker MagicEffectApplyTracker::ProcessEvent(const RE::TESMagicEffectApply
                 }
             } else if (formID == assets->spellID.runic) {
                 if (caster->HasSpell(assets->SpellFinisherButton)) {
-                    player->StartRage(true);
+                    player->DoAction(ActionType::kRage);
                 }
             } else if (formID == assets->spellID.finisher) {
                 if (caster->HasSpell(assets->SpellRunicButton)) {
-                    player->StartRage(true);
+                    player->DoAction(ActionType::kRage);
                 }
             } else if (formID == assets->spellID.leviChargeCoolDown) {
                 spdlog::debug("levi charge in cooldown...");

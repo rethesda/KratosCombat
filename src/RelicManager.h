@@ -3,6 +3,7 @@
 #include "RelicFactory.h"
 #include "Weapons/RelicWeapon.h"
 #include "Actors/Kratos.h"
+#include "Actors/Capabilities/Rager.h"
 
 using namespace ExtraDataUtil;
 
@@ -449,6 +450,12 @@ public:
         if (a_actor->IsPlayer())
             Config::SpecialWeapon->value = relicType;
 
+        if (activeActor && activeActor->IsValid() && activeActor->IsInRage()) {
+            if (auto rager = activeActor->GetCapabilityAs<Rager>(); rager && !rager->IsWantFinishRage()) {
+                activeActor->EndRage(false, false, false);
+            }
+        }
+
         if (activeActor && activeActor->IsValid())
             activeActor->OnEquip(activeRelic);
     }
@@ -612,6 +619,12 @@ public:
     }
 
     Kratos* GetPlayer() const {return player;}
+
+    void OnRageConfigChanged()
+    {
+        if (GetOrInitializePlayer())
+            player->SetRageType((RageType)Config::RageType);
+    }
     void UpdateRelic(RE::Projectile* a_this, float a_delta)
     {
         if (a_this) {

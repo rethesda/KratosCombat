@@ -104,26 +104,31 @@ RE::TESAmmo* ThrowableRelicWeapon::CreateBaseAmmo(RE::BGSProjectile* a_baseProje
     return ammoBase;
 }
 
-RE::NiColorA ThrowableRelicWeapon::TrailData::GetColorByIndex(const uint32_t a_index)
+const RE::NiColorA& ThrowableRelicWeapon::TrailData::GetColorByIndex(const uint32_t a_index) const noexcept
 {
     switch ((TrailColor)a_index) {
-    case TrailColor::kWhite:
-        return WHITE;
-    case TrailColor::kIceBlue:
-        return ICEBLUE;
-    case TrailColor::kSkyBlue:
-        return SKYBLUE;
-    case TrailColor::kBlue:
-        return BLUE;
-    case TrailColor::kYellow:
-        return YELLOW;
-    case TrailColor::kGold:
-        return GOLD;
-    case TrailColor::kSilver:
-        return SILVER;
-    default:
-        return WHITE;
+    case TrailColor::kWhite:   return WHITE;
+    case TrailColor::kIceBlue: return ICEBLUE;
+    case TrailColor::kSkyBlue: return SKYBLUE;
+    case TrailColor::kBlue:    return BLUE;
+    case TrailColor::kYellow:  return YELLOW;
+    case TrailColor::kGold:    return GOLD;
+    case TrailColor::kSilver:  return SILVER;
+    default:                   return WHITE;
     }
+}
+const std::string& ThrowableRelicWeapon::TrailData::GetTrailMeshByEnchantment(const RE::EnchantmentItem* a_ench) const noexcept
+{
+    const auto enchEffect  = (a_ench && !a_ench->effects.empty()) ? a_ench->effects[0] : nullptr;
+    const auto baseEffect  = enchEffect ? enchEffect->baseEffect : nullptr;
+    const auto keywords    = baseEffect ? baseEffect->keywords : nullptr;
+    const auto keyword     = (keywords && *keywords) ? keywords[0] : nullptr;
+    const auto keywordName = keyword ? static_cast<std::string_view>(keyword->formEditorID) : std::string_view{};
+    if (keywordName.empty())                                   return Config::TrailModelPathDef;
+    if (keywordName.find("Frost"sv) != std::string_view::npos) return Config::TrailModelPathFrost;
+    if (keywordName.find("Shock"sv) != std::string_view::npos) return Config::TrailModelPathShock;
+    if (keywordName.find("Fire"sv)  != std::string_view::npos) return Config::TrailModelPathFire;
+                                                               return Config::TrailModelPathMagic;
 }
 
 bool ThrowableRelicWeapon::Initialize()
@@ -229,10 +234,13 @@ bool ThrowableRelicWeapon::InitiateTrail() noexcept
     if (!_trailInitiated) {
         auto bone = replacedProjectileModel.get();
         if (bone) {
-            const bool isCharged = false;//IsCharged(true);
-            const float intensity = isCharged ? 3.f : 2.f;
-            const auto meshOverride = isCharged ? Config::TrailModelPathFrost : Config::TrailModelPathDef;
-            trailData = TrailData(meshOverride, intensity);
+            const bool isCharged = IsCharged(true);
+            const float intensity = isCharged ? 1.69f : 1.f;
+            const auto meshOverride = isCharged ? trailData.GetTrailMeshByEnchantment(ench) : Config::TrailModelPathDef;
+
+            trailData.trailOverride.meshOverride       = meshOverride;
+            trailData.trailOverride.baseColorScaleMult = Config::TrailColorScaleMult * intensity;
+            trailData.trailOverride.lifetimeMult       = Config::TrailLifetimeMult * intensity;
 
             if (Config::DrawTrails && (APIs::precision || APIs::Request())) {
                 trailData.transformOverride.additionalRotation = RE::NiMatrix3(0.f, 0.f, -NI_HALF_PI);
@@ -408,8 +416,12 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
 //    RE::Projectile::LaunchData lData(ThrowableWeaponDummyProjectile, throwerActor, origin, projectileRotation);
     RE::Projectile::LaunchData lData(throwerActor, origin, projectileRotation, ThrowableWeaponDummyAmmo, weap);
     lData.poison = ObjectUtil::Poison::GetEquippedObjPoison(throwerActor, false);
+
+    ench = nullptr;
     if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(throwerActor) > 0.f)
         lData.enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(throwerActor);
+
+    ench = lData.enchantItem;
 
     const float impulse = thrower->GetImpulsePower(weap->weight);    // [mN.s]
 

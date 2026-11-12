@@ -106,9 +106,11 @@ public:
     void StopChargingThrow();
     void StartWeaponCharging();
     void StopWeaponCharging();
+    void ChargeWeapon(const uint8_t a_stage);
     void StartRage(bool a_justAnim = false);
     void EndRage(const bool a_fromAnnotation = false, const bool a_playAnim = true, const bool a_justAnim = false);
     void RestoreRage(const float a_value, const bool a_justRestore);
+    void RestoreRageDirect(const float a_value, const bool a_justRestore);
     void SetRageType(RageType a_rageType);
     bool IsCanRage();
 

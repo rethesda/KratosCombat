@@ -192,6 +192,10 @@ void BaseActor::StopWeaponCharging()
 {
     if (auto cap = GetCapabilityAs<Charger>()) cap->StopWeaponCharging();
 }
+void BaseActor::ChargeWeapon(const uint8_t a_stage)
+{
+    if (auto cap = GetCapabilityAs<Charger>()) cap->ChargeWeapon(a_stage);
+}
 
 void BaseActor::StartRage(bool a_justAnim)
 {
@@ -204,6 +208,10 @@ void BaseActor::EndRage(const bool a_fromAnnotation, const bool a_playAnim, cons
 void BaseActor::RestoreRage(const float a_value, const bool a_justRestore)
 {
     if (auto cap = GetCapabilityAs<Rager>()) cap->RestoreRage(cap->CalcRageDamageOrBuffAmount(a_value), a_justRestore);
+}
+void BaseActor::RestoreRageDirect(const float a_value, const bool a_justRestore)
+{
+    if (auto cap = GetCapabilityAs<Rager>()) cap->RestoreRage(a_value, a_justRestore);
 }
 void BaseActor::SetRageType(RageType a_rageType)
 {

@@ -21,6 +21,10 @@ namespace Papyrus
 #endif
 
         Config::CheckConfig(true);
+
+#ifdef KRATOS_COMBAT_3
+        RelicManager::GetSingleton()->OnRageConfigChanged();
+#endif
     }
 /*
     void KratosCombatMCM::OnConfigOpen(RE::TESQuest*)

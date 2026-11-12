@@ -8,15 +8,22 @@ Charger::Charger()
 }
 
 void Charger::StartWeaponCharging() {
-    if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic /*&& IsCanCharge(rHandRelic->type)*/) {
+    if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic) {
         rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 1u, -1u);
     } else {
         spdlog::info("the weapon is not chargeable");
     }
 }
 void Charger::StopWeaponCharging() {
-    if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic /*&& IsCanCharge(rHandRelic->type)*/) {
+    if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic) {
         rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 0u, -1u);
+    } else {
+        spdlog::info("the weapon is not chargeable");
+    }
+}
+void Charger::ChargeWeapon(const uint8_t a_stage) {
+    if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic) {
+        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, a_stage, -1u);
     } else {
         spdlog::info("the weapon is not chargeable");
     }
@@ -33,7 +40,7 @@ bool Charger::IsCanCharge(const RelicType a_relic) const
     return canCharge[index];
 }
 
-void Charger::OnAttach(BaseActor* a_actor) 
+void Charger::OnAttach(BaseActor* a_actor)
 {
     ActorCapability::OnAttach(a_actor);
     if (parent && parent->IsValid()) {

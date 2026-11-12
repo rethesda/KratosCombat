@@ -1,33 +1,64 @@
 #include "Rager.h"
 #include "Assets.h"
+#include "Settings.h"
 #include "util.h"
+#include "RelicManager.h"
 #include "Actors/BaseActor.h"
+#include "Weapons/RelicWeapon.h"
 
 Rager::Rager()
 {
+}
+
+void Rager::OnAttach(BaseActor* a_actor)
+{
+    ActorCapability::OnAttach(a_actor);
+
+    if (auto assets = Assets::GetSingleton()) {
+        SpellSpartanRage   = assets->SpellSpartanRage;
+        SpellStrenghtBuff  = assets->SpellStrenghtBuff;
+        EffectSpartanRage  = assets->EffectSpartanRage;
+        EffectStrenghtBuff = assets->EffectStrenghtBuff;
+    }
+
+    if (parent && parent->IsValid() && parent->GetActor()) {
+        if (parent->GetActor()->IsPlayerRef() && Config::RageAmount && Config::RageLimit && Config::RageBuffRate && Config::RageDamageRate) {
+            rage             = &Config::RageAmount->value;
+            rageLimit        = &Config::RageLimit->value;
+            rageBuffAmount   = &Config::RageBuffRate->value;
+            rageDamageAmount = &Config::RageDamageRate->value;
+        } else {
+            localRage             = 0.f;
+            localRageLimit        = Config::RageLimit      ? Config::RageLimit->value      : localRageLimit;
+            localRageBuffAmount   = Config::RageBuffRate    ? Config::RageBuffRate->value    : localRageBuffAmount;
+            localRageDamageAmount = Config::RageDamageRate  ? Config::RageDamageRate->value  : localRageDamageAmount;
+        }
+    }
+
+    rageType = (RageType)Config::RageType;
 }
 
 float Rager::CalcRageDamageOrBuffAmount(const float a_amount, const float a_mult)
 {
     if (a_amount == 0.f) return 0.f;
     else if (a_amount > 0.f) {
-        if (IsInRage()) return -(rageDamageAmount * a_mult * (5.f + a_amount / 300.f));
-        else return (rageBuffAmount * a_mult * (1.f + sqrtf(a_amount) / 100.f));
-    } return (rageDamageAmount * a_mult * (a_amount - 1.f) / 5.f);
+        if (IsInRage()) return -(*rageDamageAmount * a_mult * (5.f + a_amount / 300.f));
+        else return (*rageBuffAmount * a_mult * (1.f + sqrtf(a_amount) / 100.f));
+    } return (*rageDamageAmount * a_mult * (a_amount - 1.f) / 5.f);
 }
 
 void Rager::RestoreRage(const float a_value, const bool a_justRestore)
 {
-    rage += a_value;
-    if (rage < 0.f) {rage = 0.f; if (!a_justRestore) EndRage(false, true, true);}
-    else if (rage > rageLimit) rage = rageLimit;
+    *rage += a_value;
+    if (*rage < 0.f) {*rage = 0.f; if (!a_justRestore) EndRage(false, true, true);}
+    else if (*rage > *rageLimit) *rage = *rageLimit;
 }
 
 void Rager::StartRage(const bool a_justAnim)
 {
     auto actor = parent && parent->IsValid() ? parent->GetActor() : nullptr;
     if (actor) {
-        if ((rage - rageDamageAmount * 10.f) < 0.f) return;
+        if ((*rage - *rageDamageAmount * 10.f) < 0.f) return;
         actor->SetGraphVariableInt("iRageType", (int32_t)rageType);
         _LastEquippedObjectR = actor->GetEquippedObject(false) ? actor->GetEquippedObject(false)->As<RE::TESBoundObject>() : nullptr;
         _LastEquippedObjectL = actor->GetEquippedObject(true) ? actor->GetEquippedObject(true)->As<RE::TESBoundObject>()  : nullptr;
@@ -37,7 +68,7 @@ void Rager::StartRage(const bool a_justAnim)
         {
         case RageType::kFury:
             if (a_justAnim) {
-                actor->SetGraphVariableInt("iKratosActionType", (uint32_t)ActionType::kRage);
+                actor->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kRage);
                 actor->NotifyAnimationGraph("DoKratosAction");
                 return;
             }
@@ -55,7 +86,7 @@ void Rager::StartRage(const bool a_justAnim)
                 _gettingHittedInValor = false;
                 actor->SetGraphVariableInt("iKratosActionType", (uint8_t)ActionType::kRage);
                 actor->NotifyAnimationGraph("DoKratosAction");
-                RestoreRage(-(rageDamageAmount * 5.f), true);
+                RestoreRage(-(*rageDamageAmount * 5.f), true);
             }
             if (assets->VFXeffects.valor) actor->ApplyArtObject(assets->VFXeffects.valor, 1.f, nullptr, false, false, parent->GetRHandBone());
             break;
@@ -63,14 +94,11 @@ void Rager::StartRage(const bool a_justAnim)
             if (assets->VFXeffects.wrath) actor->ApplyArtObject(assets->VFXeffects.wrath, 1.f, nullptr, false, false, parent->GetRHandBone());
             return;
         case RageType::kLegacy:
-        //    if (BladeOfOlympus) {
-        //    //    if (auto mCaster = actor->GetMagicCaster(RE::MagicSystem::CastingSource::kInstant); mCaster && SpellSpartanRage) {
-        //    //        mCaster->CastSpellImmediate(SpellSpartanRage, false, actor, 1.f, false, 2.f, actor);
-        //    //    }
-        //        if (assets->VFXeffects.legacy) actor->ApplyArtObject(assets->VFXeffects.legacy, 1.f, nullptr, false, false, GetRhandBone(actor));
-        //        ObjectUtil::Actor::EquipItem(actor, BladeOfOlympus);
-        //        ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
-        //    }
+            if (auto bladeOfOlympus = FindKnownRelic(RelicType::kBladeOfOlympus)) {
+                if (assets->VFXeffects.legacy) actor->ApplyArtObject(assets->VFXeffects.legacy, 1.f, nullptr, false, false, parent->GetRHandBone());
+                ObjectUtil::Actor::EquipItem(actor, bladeOfOlympus->GetWeapon());
+                ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
+            }
             break;
         default:
             break;
@@ -86,7 +114,7 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
     auto actor = parent && parent->IsValid() ? parent->GetActor() : nullptr;
     if (actor) {
         _isWantFinishRage = true;
-        switch (rageType)
+        switch (lastTriggeredRage)
         {
         case RageType::kFury:
             if (a_playAnim) {
@@ -98,7 +126,7 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
                 auto aHandle = actor->GetHandle();
                 mTarget->DispelEffect(SpellSpartanRage, aHandle);
                 ObjectUtil::Actor::ResetEquipAnimationAfter(0, actor);
-                RestoreRage(-(rageDamageAmount * 3.f), true);
+                RestoreRage(-(*rageDamageAmount * 3.f), true);
                 if (_LastEquippedObjectR)
                     ObjectUtil::Actor::EquipItem(actor, _LastEquippedObjectR, true);
                 if (_LastEquippedObjectL)
@@ -109,7 +137,7 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
         case RageType::kValor:
             if (a_fromAnnotation) {
                 ObjectUtil::Actor::SendAnimationEvent(actor, "weaponSwing");
-                actor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, (rageBuffAmount * 10.f));
+                actor->AsActorValueOwner()->RestoreActorValue(RE::ActorValue::kHealth, (*rageBuffAmount * 10.f));
                 if (_gettingHittedInValor) ObjectUtil::Actor::CastSpell(SpellStrenghtBuff, actor, actor, actor);
                 _gettingHittedInValor = false;
             }
@@ -122,7 +150,13 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
                 _isWantFinishRage = false;
                 if (a_justAnim) return;
             }
-            ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
+            ObjectUtil::Actor::ResetEquipAnimationAfter(0, actor);
+            if (_LastEquippedObjectR)
+                ObjectUtil::Actor::EquipItem(actor, _LastEquippedObjectR, true);
+            else if (actor->GetEquippedObject(false))
+                ObjectUtil::Actor::UnEquipItem(actor, false, false, false, false, true, true);
+            if (_LastEquippedObjectL)
+                ObjectUtil::Actor::EquipItem(actor, _LastEquippedObjectL, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, actor);
             break;
 
@@ -140,7 +174,7 @@ void Rager::EndRage(const bool a_fromAnnotation, const bool a_playAnim, const bo
 
 void Rager::Update(const float a_delta)
 {
-    if (IsInRage()) RestoreRage(-(rageDamageAmount * a_delta), true);
+    if (IsInRage()) RestoreRage(-(*rageDamageAmount * (*g_deltaTimeRealTime)), true);
 }
 
 void Rager::HandleAction(const ActionType a_action)
@@ -160,4 +194,13 @@ void Rager::HandleAction(const ActionType a_action)
     default:
         break;
     }
+}
+
+RelicWeapon* Rager::FindKnownRelic(const RelicType a_type) const
+{
+    for (const auto& relicID : parent->GetKnownRelics()) {
+        if (auto relic = RelicManager::GetSingleton()->GetActiveRelic(relicID); relic && relic->GetType() == a_type)
+            return relic;
+    }
+    return nullptr;
 }

@@ -8,6 +8,7 @@ RelicWeapon::~RelicWeapon()
 RelicWeapon::RelicWeapon(RE::TESBoundObject* a_object)
     : weap(a_object->As<RE::TESObjectWEAP>())
 {
+    if (weap) damage = static_cast<float>(weap->attackDamage);
     spdlog::debug("relic weapon constructed: {}", weap->GetFullName());
 }
 

@@ -370,10 +370,10 @@ bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector)
                         if (weap && ench && ench->effects[0])
                             ObjectUtil::Enchantment::ChargeInventoryWeapon(shooter, weap, -ench->effects[0]->effectItem.magnitude);
 
-                        if (!isArriving && callerParent) {
+                        if (!isArriving && throwerParent) {
                             shooter->UseSkill(RE::ActorValue::kArchery, 1.8f, rtData.weaponSource);
 
-                            callerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
+                            throwerParent->RestoreRage(Config::RageBuffRate->value * 0.25f, true);
                         }
                     }
                 }

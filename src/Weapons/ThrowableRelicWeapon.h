@@ -79,12 +79,13 @@ public:
         TrailTransformOverride transformOverride = TrailTransformOverride();
         RE::NiPointer<RE::NiNode>   trailParentNode;
 
-        RE::NiColorA GetColorByIndex(const uint32_t a_index);
-        TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.f) {
+        const RE::NiColorA& GetColorByIndex(const uint32_t a_index) const noexcept;
+        const std::string& GetTrailMeshByEnchantment(const RE::EnchantmentItem* a_ench) const noexcept;
+        TrailData(const std::string a_meshDirectory = Config::TrailModelPathDef, const float a_intensity = 1.F, const uint32_t a_colorIndex = 0U) {
             trailOverride = TrailOverride(
-                Config::TrailLifetimeMult * a_intensity, 
-                GetColorByIndex(Config::TrailColorIndexMjolnir), 
-                Config::TrailColorScaleMult * a_intensity, 
+                Config::TrailLifetimeMult * a_intensity,
+                GetColorByIndex(a_colorIndex),
+                Config::TrailColorScaleMult * a_intensity,
                 a_meshDirectory
             );
         }

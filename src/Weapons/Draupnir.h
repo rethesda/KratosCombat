@@ -18,7 +18,7 @@ public:
     void OnMenuOpenCloseEvent(const bool a_opening) override;
 
 //    void GetPosition(RE::NiPoint3& a_point) override;
-    RelicType GetType() const override {return RelicType::kLeviathanAxe;}
+    RelicType GetType() const override {return RelicType::kDraupnir;}
 //    void Throw(const bool isVertical, const bool justContinue = false, const bool isHoming = false) override;
     bool PreThrow() override;
     void PostThrow() override;

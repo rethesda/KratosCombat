@@ -40,6 +40,7 @@ public:
     static inline std::string TrailModelPathMagic   = "effects/WeaponTrails/AttackTrailMagic.nif";
     static inline std::string TrailModelPathFrost   = "effects/WeaponTrails/AttackTrailMagic_Frost.nif";
     static inline std::string TrailModelPathShock   = "effects/WeaponTrails/AttackTrailMagic_Shock.nif";
+    static inline std::string TrailModelPathFire    = "effects/WeaponTrails/AttackTrailMagic_Fire.nif";
     
     //Requirements
     static inline bool IsSkipEquipAnimationInstalled = false;

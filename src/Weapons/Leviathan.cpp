@@ -89,40 +89,26 @@ bool LeviathanAxe::PreThrow()
 }
 void LeviathanAxe::PostThrow()
 {
-    auto rHandBone = throwerParent->GetRHandBone();
-    if (!rHandBone) {spdlog::error("LeviathanAxe::Throw - RHandBone is null"); return;}
-
     auto throwerActor = throwerParent ? throwerParent->GetActor() : nullptr;
     if (!throwerActor) {spdlog::error("LeviathanAxe::Throw - thrower actor is null"); return;}
 
-    if (!projectile) {spdlog::error("LeviathanAxe::Throw - projectile is null"); return;}
-    auto& projectileRTD = projectile->GetProjectileRuntimeData();
+    gravity = 2.34f;
+    gravity /= std::max(std::powf(throwingChargeDuration + 1.f, 3.f), 0.01f);
+    gravity = std::max(gravity, 0.5f);
 
-    {
-        {
-            gravity = 3.21f;
-            gravity /= std::max(std::powf(throwingChargeDuration + 1.f, 3.f), 0.01f);
-            gravity = std::max(gravity, 0.5f);
-        }
+    _isLastThrowCharged = ench != nullptr;
 
-        RE::EnchantmentItem* enchantItem = nullptr;
-        if (ObjectUtil::Enchantment::GetEquippedWeaponCharge(throwerActor) > 0.f)
-            enchantItem = ObjectUtil::Enchantment::GetEquippedWeaponEnchantment(throwerActor);
-        else
-            enchantItem = nullptr;
+    trailData.trailOverride.baseColorOverride = trailData.GetColorByIndex(Config::TrailColorIndexLeviathan);
 
-        _isLastThrowCharged = enchantItem != nullptr;
+//    if (isPenetrating) return;
 
-    //    if (isPenetrating) return;
+    throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
 
-        throwerActor->SetGraphVariableBool("bLeviInCatchRange", false);
-
-        SetThrowState(ThrowState::kThrown);
-        if (stuckedBone)   stuckedBone.reset();
-        if (stuckedActor)  stuckedActor.reset();
-        lastHitActors.clear();
-        lastHitForms.clear();
-    }
+    SetThrowState(ThrowState::kThrown);
+    if (stuckedBone)   stuckedBone.reset();
+    if (stuckedActor)  stuckedActor.reset();
+    lastHitActors.clear();
+    lastHitForms.clear();
 }
 
 bool LeviathanAxe::Call(Caller* a_caller, const bool a_justDestroy, std::optional<float> a_delay)
@@ -152,7 +138,7 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
         return;
     }
 
-    auto ench       = weap ? ObjectUtil::Enchantment::GetInventoryItemEnchantment(AnArchos, weap) : nullptr;
+    ench = weap ? ObjectUtil::Enchantment::GetInventoryItemEnchantment(AnArchos, weap) : nullptr;
     auto enchEffect = ench ? ench->effects[0] : nullptr;
     auto enchBase   = enchEffect ? enchEffect->baseEffect : nullptr;
     const auto leviDam  = damage;
@@ -183,8 +169,8 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
             spdlog::debug("levi not has any enchantment, levi is enchanting...");
             if (defaultEnch) {
                 ench = defaultEnch;
-                enchEffect  = ench ? ench->effects[0] : nullptr;
-                enchBase     = enchEffect ? enchEffect->baseEffect : nullptr;
+                enchEffect = ench ? ench->effects[0] : nullptr;
+                enchBase   = enchEffect ? enchEffect->baseEffect : nullptr;
                 if (enchBase) {
                     ResetCharge(enchMag, defaultEnchMag, false, true);
                     ObjectUtil::Enchantment::EnchantEquippedWeapon(AnArchos, ench, 300.f, false, false);

@@ -19,6 +19,7 @@ public:
 
     void StartWeaponCharging();
     void StopWeaponCharging();
+    void ChargeWeapon(const uint8_t a_stage);
 
     bool IsCanCharge(const RelicType a_relic) const;
 

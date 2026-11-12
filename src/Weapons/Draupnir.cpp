@@ -71,7 +71,7 @@ void Draupnir::Update()
                 length = length > capsuleLength ? length : capsuleLength;
                 float scale = fmax(length, capsule.radius) * 0.01f;
                 float tipOffset = length;
-                trailData = TrailData(meshOverride, intensity);
+                trailData = TrailData(meshOverride, intensity, Config::TrailColorIndexDraupnir);
 
                 if (Config::UsePrecisionTrails && (Config::IsPrecisionInstalled || APIs::precision || APIs::Request())) {
                     trailUpdate.Done();
