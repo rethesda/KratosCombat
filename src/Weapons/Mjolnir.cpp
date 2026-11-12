@@ -126,11 +126,11 @@ void Mjolnir::Catch(const bool a_justDestroy)
 {
     SmartRelicWeapon::Catch(a_justDestroy);
 }
-void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
+bool Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {
     if (!GetWielder() || !GetWielder()->IsValid()) {
         spdlog::debug("charger is invalid");
-        return;
+        return false;
     }
 
     auto assets   = Assets::GetSingleton();
@@ -263,8 +263,9 @@ void Mjolnir::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, co
 #endif
         }
     } else spdlog::error("can't found mjolnir for charging!!");
+    return _isCharged;
 }
-void Mjolnir::ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck, const bool a_justReset)
+bool Mjolnir::ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck, const bool a_justReset)
 {
     if (a_justReset) {
         if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), weap) == defaultEnch) {
@@ -281,4 +282,7 @@ void Mjolnir::ResetCharge(float* a_magnitude, const float a_defMagnitude, const 
             _isCharged = false;
         } else if (!a_justCheck) {chargeHitCount -= 1;}
     }
+    if (GetWielder() && GetWielder()->IsValid())
+        GetWielder()->GetActor()->SetGraphVariableBool("IsWeaponCharged", _isCharged);
+    return _isCharged;
 }

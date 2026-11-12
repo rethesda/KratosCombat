@@ -119,11 +119,11 @@ void LeviathanAxe::Catch(const bool a_justDestroy)
 {
     SmartRelicWeapon::Catch(a_justDestroy);
 }
-void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
+bool LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitude, const uint8_t a_stage, const uint8_t a_coolDown)
 {
     if (!GetWielder() || !GetWielder()->IsValid()) {
         spdlog::debug("charger is invalid");
-        return;
+        return false;
     }
 
     auto assets     = Assets::GetSingleton();
@@ -135,7 +135,7 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
             AnArchos->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone, false);
         if (auto soundEffect = assets->soundEffects.chargeLevi; soundEffect)
             ObjectUtil::Sound::PlaySound(soundEffect, rHandBone, 5.f);
-        return;
+        return false;
     }
 
     ench = weap ? ObjectUtil::Enchantment::GetInventoryItemEnchantment(AnArchos, weap) : nullptr;
@@ -200,10 +200,10 @@ void LeviathanAxe::Charge(const uint8_t a_chargeHitCount, const float a_magnitud
 #endif
         }
     } else spdlog::error("can't found levi for charging!!");
+    return _isCharged;
 }
-void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck, const bool a_justReset)
+bool LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck, const bool a_justReset)
 {
-    auto assets = Assets::GetSingleton();
     if (a_justReset) {
         if (ObjectUtil::Enchantment::GetInventoryItemEnchantment(RE::PlayerCharacter::GetSingleton(), weap) == defaultEnch) {
             ObjectUtil::Enchantment::DisEnchantInventoryWeapon(RE::PlayerCharacter::GetSingleton(), weap);
@@ -219,4 +219,7 @@ void LeviathanAxe::ResetCharge(float* a_magnitude, const float a_defMagnitude, c
             _isCharged = false;
         } else if (!a_justCheck) {chargeHitCount -= 1;}
     }
+    if (GetWielder() && GetWielder()->IsValid())
+        GetWielder()->GetActor()->SetGraphVariableBool("IsWeaponCharged", _isCharged);
+    return _isCharged;
 }

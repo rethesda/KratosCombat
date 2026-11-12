@@ -23,9 +23,6 @@ public:
     bool PreThrow() override;
     void PostThrow() override;
     bool Call(Caller* a_caller, const bool a_justDestroy = false, std::optional<float> a_delay = std::nullopt) override;
-    void Catch(bool a_justDestroy = false) override;
-    void Charge(const uint8_t a_chargeHitCount = 1u, const float a_magnitude = 1.5f, const uint8_t a_stage = 3u, const uint8_t a_coolDown = 15u) override;
-    void ResetCharge(float* a_magnitude, const float a_defMagnitude, const bool a_justCheck = false, const bool a_justReset = false) override;
 //    void SetHitRotation(RE::NiMatrix3& a_matrix, const bool a_vertical) override;
 //    void SetHitRotation(RE::NiPoint3& a_angles, const RE::NiPoint3& a_direction, const bool a_vertical) override;
 //    void TweakHitPosition(RE::NiPoint3& a_position, const RE::NiPoint3& a_direction, const float a_offset, const bool a_vertical) override;

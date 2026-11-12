@@ -34,6 +34,7 @@ void RelicWeapon::OnEquip(BaseActor* a_actor) {
         lastWielder = a_actor;
         isEquipped = true;
         currentReference = nullptr;
+        ResetCharge(enchMag, defaultEnchMag, true);
     } else {
         wielder = nullptr;
         isEquipped = false;

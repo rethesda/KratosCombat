@@ -9,21 +9,33 @@ Charger::Charger()
 
 void Charger::StartWeaponCharging() {
     if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic) {
-        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 1u, -1u);
+        if (rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 1u, -1u)) {
+            parent->GetActor()->SetGraphVariableBool("IsWeaponCharged", true);
+        } else {
+            parent->GetActor()->SetGraphVariableBool("IsWeaponCharged", false);
+        }
     } else {
         spdlog::info("the weapon is not chargeable");
     }
 }
 void Charger::StopWeaponCharging() {
     if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic) {
-        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 0u, -1u);
+        if (rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, 0u, -1u)) {
+            parent->GetActor()->SetGraphVariableBool("IsWeaponCharged", true);
+        } else {
+            parent->GetActor()->SetGraphVariableBool("IsWeaponCharged", false);
+        }
     } else {
         spdlog::info("the weapon is not chargeable");
     }
 }
 void Charger::ChargeWeapon(const uint8_t a_stage) {
     if (auto rHandRelic = parent->GetRightHandRelic(); rHandRelic) {
-        rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, a_stage, -1u);
+        if (rHandRelic->Charge(Config::ChargeHitCount, Config::ChargeMagnitude, a_stage, -1u)) {
+            parent->GetActor()->SetGraphVariableBool("IsWeaponCharged", true);
+        } else {
+            parent->GetActor()->SetGraphVariableBool("IsWeaponCharged", false);
+        }
     } else {
         spdlog::info("the weapon is not chargeable");
     }

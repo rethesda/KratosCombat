@@ -313,6 +313,8 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
                         localRotation = parentWorldRotate.Transpose() * desiredParentWorldRotate;
                     }
                 }
+
+                ResetCharge(enchMag, defaultEnchMag, true);
             }
         }
 
