@@ -198,7 +198,24 @@ namespace AsyncUtil
 }
 namespace ExtraDataUtil //  huge thanks to D7ry
 {
-    static std::optional<uint16_t> GetUniqueID(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    [[nodiscard]] inline static RE::InventoryEntryData* GetInventoryEntry(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    {
+        auto changes = (a_actor && a_object) ? a_actor->GetInventoryChanges() : nullptr;
+        if (!changes || !changes->entryList) {
+            return nullptr;
+        }
+        for (auto entry : *changes->entryList) {
+            if (entry && entry->object == a_object) {
+                return entry;
+            }
+        }
+        return nullptr;
+    }
+    [[nodiscard]] inline static bool IsWornList(const RE::ExtraDataList* a_list)
+    {
+        return a_list && (a_list->HasType<RE::ExtraWorn>() || a_list->HasType<RE::ExtraWornLeft>());
+    }
+    [[nodiscard]] inline static std::optional<uint16_t> GetUniqueID(RE::Actor* a_actor, RE::TESBoundObject* a_object, std::optional<uint16_t> a_pad16 = std::nullopt)
     {
         if (!a_actor || !a_object) return std::nullopt;
 
@@ -212,11 +229,40 @@ namespace ExtraDataUtil //  huge thanks to D7ry
 
         for (auto xList : *eData->extraLists) {
             if (auto xUniqueID = xList ? xList->GetByType<RE::ExtraUniqueID>() : nullptr) {
-                if (xUniqueID->uniqueID != 0)
+                if (xUniqueID->uniqueID != 0 && (!a_pad16 || xUniqueID->pad16 == *a_pad16))
                     return xUniqueID->uniqueID;
             }
         }
         return std::nullopt;
+    }
+    //  Reads the persistent unique ID from a single extra data list.
+    [[nodiscard]] inline static std::optional<uint16_t> GetUniqueIDFromExtraList(RE::ExtraDataList* a_xList)
+    {
+        if (!a_xList) return std::nullopt;
+        if (auto xUniqueID = a_xList->GetByType<RE::ExtraUniqueID>(); xUniqueID && xUniqueID->uniqueID != 0)
+            return xUniqueID->uniqueID;
+        return std::nullopt;
+    }
+    //  Returns the inventory entry's extra list that carries the persistent unique ID.
+    //  The identity list is not necessarily the front one (the worn list can come first),
+    //  so all lists are searched before falling back to the first non-worn list.
+    [[nodiscard]] inline static RE::ExtraDataList* FindExtraListWithUniqueID(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    {
+        auto entry = GetInventoryEntry(a_actor, a_object);
+        if (!entry || !entry->extraLists) return nullptr;
+
+        RE::ExtraDataList* fallback = nullptr;
+
+        for (auto* xList : *entry->extraLists) {
+            if (!xList) continue;
+            if (GetUniqueIDFromExtraList(xList)) {
+                return xList;
+            }
+            if (!fallback && !IsWornList(xList)) {
+                fallback = xList;
+            }
+        }
+        return fallback;
     }
 
     static bool DeleteAnExtraArrow(RE::TESObjectREFR* a_victim, RE::BSFixedString& a_arrow3Dname)
@@ -433,6 +479,22 @@ namespace ExtraDataUtil //  huge thanks to D7ry
         return newList;
     }
 
+    [[nodiscard]] inline static RE::ExtraDataList* FindBaseExtraList(RE::Actor* a_actor, RE::TESBoundObject* a_object, bool a_initiateIfNotExists = false)
+    {
+        auto entry = GetInventoryEntry(a_actor, a_object);
+        if (!entry) return nullptr;
+        if (entry->extraLists) {
+            for (auto* xList : *entry->extraLists) {
+                if (xList && !IsWornList(xList)) {
+                    return xList;
+                }
+            }
+        }
+        if (!a_initiateIfNotExists) return nullptr;
+        auto fresh = CreateExtraDataList();
+        entry->AddExtraList(fresh);
+        return fresh;
+    }
     inline void FreeExtraDataList(RE::ExtraDataList* a_list)
     {
         if (!a_list) return;

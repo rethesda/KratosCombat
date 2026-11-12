@@ -31,6 +31,9 @@ ActorCapability* SmartRelicWeapon::GetActiveController() const noexcept
 }
 void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
 {
+    auto callerActor = callerParent ? callerParent->GetActor() : nullptr;
+    if (!callerActor) return;
+
     if (replacedProjectileModel) {
         transformW = GetWorldTransform();
         a_point = transformW.translate * 70.f;
@@ -52,21 +55,17 @@ void SmartRelicWeapon::GetPosition(RE::NiPoint3& a_point)
             spdlog::debug("{}' stucked actor's extra arrows removed", weap->GetFullName());
             stuckedActor.reset();
         } else spdlog::debug("{} not stucked anybody", weap->GetFullName());
-    }
-
-    auto callerActor = callerParent ? callerParent->GetActor() : nullptr;
-    if (!callerActor) return;
-
-    if (GetWielder()&& GetWielder()->GetActor() && GetThrowState() == ThrowState::kThrowable) {
-        if (auto backWeaponSheathe = callerActor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
+    } else if (const auto carrier = GetCarrier(); const auto carrierActor = carrier ? carrier->GetActor() : nullptr) {
+        if (auto backWeaponSheathe = carrierActor->GetNodeByName("WeaponBack"); backWeaponSheathe) {
             const auto& backSheatheTransform = backWeaponSheathe->world;
             a_point = backSheatheTransform.translate;
             const auto& rightDir = backSheatheTransform.rotate * rightVec3;
             const auto& backDir = backSheatheTransform.rotate * backVec3;
             velocity = (0.69f * rightDir + 0.31f * backDir) * 2400.f;
-            spdlog::debug("{} is coming from back sheathe of {}", weap->GetFullName(), GetWielder()->GetActor()->GetName());
+            spdlog::debug("{} is coming from back sheathe of {}", weap->GetFullName(), carrierActor->GetName());
         }
     }
+
     const auto callerPos = callerActor->GetPosition();
     const float dist = callerPos.GetDistance(a_point);
     if (dist > 36000.f) {   // ~42000 is limit
@@ -89,6 +88,13 @@ void SmartRelicWeapon::SetState(std::unique_ptr<RelicWeaponState> a_state)
         currentState->Enter();
         if (projState != ProjectileState::kTransition)
             projState = ProjectileState::kHoming;
+    } else {    //  reset
+        if (projState == ProjectileState::kHoming ||
+            projState == ProjectileState::kTransition)
+        {
+            projState = ProjectileState::kNone;
+        }
+        SetThrowState(ThrowState::kNone);
     }
 }
 
@@ -146,11 +152,21 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
         soundData.PlayCallingHandSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
     }
 
-    if (!projectile || projectile->GetProjectileRuntimeData().flags.all(RE::Projectile::Flags::kProcessedImpacts)) {
+    bool isProjectileDestroyed = false, isParentsMatching = false, isProjectileActive = false, isProjectileMoving = false;
+    projectile = projectileHandle.get().get();
+    if (projectile) {
+        isParentsMatching     = projectile->GetParentCell() == callerActor->GetParentCell();
+        isProjectileDestroyed = projectile->GetProjectileRuntimeData().flags.all(RE::Projectile::Flags::kDestroyed);
+        isProjectileActive    = !projectile->GetProjectileRuntimeData().flags.all(RE::Projectile::Flags::kProcessedImpacts);
+        isProjectileMoving    = isParentsMatching && isProjectileActive;
+    }
+
+    if (!isProjectileMoving) {
         if (projectile) {
             if (projState != ProjectileState::kTransition && projState == ProjectileState::kStucked && projectileModel) {
+                constexpr float wobbleDuration = 0.18f;
                 Projectile::Manager::GetSingleton()->wobble.emplace_back(projectileModel->world.rotate, projectileHandle, 0.f);
-                delayedCallUpdate.RegisterForUpdate(0.3f, true);
+                delayedCallUpdate.RegisterForUpdate(wobbleDuration, true);
                 projState = ProjectileState::kTransition;
                 SetState(RelicWeaponState::Type::kArriving);
                 spdlog::debug("{} is woobling to leave where it is stucked", weap->GetFullName());
@@ -185,6 +201,7 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
             projectileHandle = *pHandlePtr;
             launchTime = AsyncUtil::GameTime::GetEngineTime();
             projectile = pHandlePtr->get().get();
+            projectile->inGameFormFlags.set(RE::TESForm::InGameFormFlag::kForcedPersistent);
         //    currentReference->Disable();
 
             if (IsArriving()) {
@@ -228,10 +245,14 @@ bool SmartRelicWeapon::Call(Caller* a_caller, const bool a_justDestroy, std::opt
 void SmartRelicWeapon::Catch(const bool a_justDestroy)
 {
     isPenetrating = false;
+    projectile = projectileHandle.get().get();  //  probably unnecessary but just in case.
+    auto callerActor = (callerParent && callerParent->IsValid()) ? callerParent->GetActor() : nullptr;
     if (projectile) {
-    //    if (APIs::precision || APIs::Request()) {
-    //        APIs::precision->RemoveProjectileCollision(throwerActor->GetHandle(), collisionDefinition);
-    //    }
+        if (!a_justDestroy && (!callerActor || callerParent->GetRightHandRelic())) {
+            SetState(nullptr);
+            caller = nullptr;
+            return;
+        }
 
         projectile->Kill();
         projectileHandle.reset();
@@ -240,55 +261,68 @@ void SmartRelicWeapon::Catch(const bool a_justDestroy)
         if (a_justDestroy) return;
     }
 
-    auto callerActor = callerParent ? callerParent->GetActor() : nullptr;
-    if (callerActor && !callerParent->GetRightHandRelic()) {
+    if (callerActor) {
         callerActor->SetGraphVariableBool("bLeviInCatchRange", true);
-
-        SetThrowState(ThrowState::kArrived);
-
-        auto assets = Assets::GetSingleton();
-        auto& rHandBone = callerParent->GetRHandBone();
-        if (auto handEffect = assets->VFXeffects.handFrost; handEffect) 
-            callerActor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone);
 
         soundData.FadeArrivingNearSounds(469);
         soundData.FadeArrivingLoopSounds(469);
-        soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
-        soundData.PlayCatchingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
+        soundData.StopArrivingLoopSounds(*g_deltaTime * 3200.f);
 
-        if (weap && currentReference) {
-            callerParent->SetSkipEquipAnim(true);
-            callerParent->SetUnequipWhenAnimEnds(false);
+        bool success = false;
+        if (weap && droppedWeaponKeep.get().get()) {
         //    callerParent->DoAction(ActionType::kWeaponCall);
-            callerActor->PickUpObject(currentReference, 1, false, false);
-        //    currentReference->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
-            ObjectUtil::Actor::EquipItem(callerActor, weap, callerParent->GetSkipEquipAnim());//, 1U, true, false, false, true);
-            ObjectUtil::Actor::ResetEquipAnimationAfter(100, callerActor);
-            RE::ShakeCamera(0.3f, position, 0.5f);
-            if (callerParent->GetSkipEquipAnim()) callerParent->SetSkipEquipAnim(false);
-        } else spdlog::warn("could not find the weapon");
+    //        callerActor->PickUpObject(currentReference, 1, false, false);
+            droppedWeaponKeep.get().get()->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, callerActor);
+            spdlog::debug("{} catched", weap->GetFullName());
+            success = true;
+        } else if (weap && callerParent == GetCarrier()) {
+            spdlog::debug("{} catched from inventory", weap->GetFullName());
+            success = true;
+        } else spdlog::error("could not find the {}", weap->GetFullName());
+
+        if (success) {
+            if (ExtraDataUtil::GetInventoryEntry(callerActor, weap)) {
+                callerParent->SetSkipEquipAnim(true);
+                callerParent->SetUnequipWhenAnimEnds(false);
+                ObjectUtil::Actor::EquipItem(callerActor, weap, callerParent->GetSkipEquipAnim(), 1U, true, false, false);
+                ObjectUtil::Actor::ResetEquipAnimationAfter(100, callerActor);
+                RE::ShakeCamera(0.3f, position, 0.5f);
+                if (callerParent->GetSkipEquipAnim()) callerParent->SetSkipEquipAnim(false);
+
+
+                SetThrowState(ThrowState::kArrived);
+
+                auto assets = Assets::GetSingleton();
+                auto& rHandBone = callerParent->GetRHandBone();
+                soundData.PlayCatchingSounds(reinterpret_cast<RE::NiAVObject**>(&rHandBone));
+                if (auto handEffect = assets->VFXeffects.handFrost; handEffect) 
+                    callerActor->ApplyArtObject(handEffect, 1.f, nullptr, false, false, rHandBone);
+
+                if (Config::UsePrecisionTrails) {
+                    auto animObjectR = callerParent->GetAnimObjectRBone();
+                    auto weaponBone = callerParent->GetWeaponBone();
+                    if (animObjectR && animObjectR->AsNode() && weaponBone && weaponParentNode) {
+                        if (animObjectR == weaponParentNode->parent) {
+                            animObjectR->AsNode()->DetachChild(weaponParentNode);
+                        }
+                        animObjectR->AsNode()->AttachChild(weaponParentNode);
+                        weaponParentNode->local.translate = RE::NiPoint3();
+                        auto& localRotation = weaponParentNode->local.rotate;
+                        const auto& desiredParentWorldRotate = weaponBone->world.rotate;
+                        const auto& parentWorldRotate = animObjectR->world.rotate;
+                        localRotation = parentWorldRotate.Transpose() * desiredParentWorldRotate;
+                    }
+                }
+            }
+        }
 
         if (stuckedBone)   stuckedBone.reset();
         if (stuckedActor)  stuckedActor.reset();
         lastHitActors.clear();
         lastHitForms.clear();
-
-        if (Config::UsePrecisionTrails) {
-            auto animObjectR = callerParent->GetAnimObjectRBone();
-            auto weaponBone = callerParent->GetWeaponBone();
-            if (animObjectR && animObjectR->AsNode() && weaponBone && weaponParentNode) {
-                animObjectR->AsNode()->AttachChild(weaponParentNode);
-                weaponParentNode->local.translate = RE::NiPoint3();
-                auto& localRotation = weaponParentNode->local.rotate;
-                const auto& desiredParentWorldRotate = weaponBone->world.rotate;
-                const auto& parentWorldRotate = animObjectR->world.rotate;
-                localRotation = parentWorldRotate.Transpose() * desiredParentWorldRotate;
-            }
-        }
         trailRemoveUpdate.RegisterForUpdate(*g_deltaTime * 2.f, false);
     }
     caller = nullptr;
-    callerActor = nullptr;
 }
 
 bool SmartRelicWeapon::OnHit(RE::hkpAllCdPointCollector* a_AllCdPointCollector) 
@@ -449,15 +483,23 @@ void SmartRelicWeapon::PostImpact(RE::Projectile::ImpactData* a_impactData, RE::
 }
 void SmartRelicWeapon::OnTrailDelete()
 {
-    if (callerParent && callerParent->GetAnimObjectRBone() && weaponParentNode) {
-        callerParent->GetAnimObjectRBone()->AsNode()->DetachChild(weaponParentNode);
+    if (weaponParentNode) {
+        auto animObjectRBone = callerParent ? callerParent->GetAnimObjectRBone() : nullptr;
+        auto animObjectRNode = animObjectRBone ? animObjectRBone->AsNode() : nullptr;
+        if (animObjectRNode && weaponParentNode->parent == animObjectRNode) {
+            animObjectRNode->DetachChild(weaponParentNode);
+        }
+        if (weaponParentNode->parent) {
+            weaponParentNode->parent->DetachChild(weaponParentNode);
+            weaponParentNode->parent = nullptr;
+        }
     }
 }
 
 void SmartRelicWeapon::Update() 
 {
     ThrowableRelicWeapon::Update();
-    if (delayedCallUpdate.IsTimeToUpdate()) {
+    if (delayedCallUpdate.IsTimeToUpdate() && caller) {
         caller->CallWeapon(this);
     }
     if (Config::DebugModeOpen) {
@@ -494,8 +536,9 @@ void SmartRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float a_de
 {
     ThrowableRelicWeapon::UpdateProjectile(a_projectile, a_delta);
     if (currentState) {
-        auto status = currentState->Update(a_delta);
-        if (status > RelicWeaponState::Status::kRunning) {
+        auto const state  = currentState.get();
+        const auto status = currentState->Update(a_delta);
+        if (status > RelicWeaponState::Status::kRunning && currentState.get() == state) {
             currentState->Exit();
             currentState.reset();
         }

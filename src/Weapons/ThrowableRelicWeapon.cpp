@@ -2,6 +2,7 @@
 #include "Actors/BaseActor.h"
 #include "Actors/Capabilities/Thrower.h"
 #include "Assets.h"
+#include "util.h"
 
 using namespace MathUtil;
 using namespace GameSettingUtil;
@@ -331,9 +332,10 @@ void ThrowableRelicWeapon::FadeTrail()
 }
 void ThrowableRelicWeapon::RemoveTrail()
 {
-    if (replacedProjectileModel && !isPenetrating) {
-        if (auto trailParentBone = trailData.trailParentNode.get(); trailParentBone) {
-            OnTrailDelete();
+    OnTrailDelete();
+    if (replacedProjectileModel) {
+        auto trailParentBone = trailData.trailParentNode.get();
+        if (trailParentBone && trailParentBone->parent == replacedProjectileModel.get()) {
             replacedProjectileModel->DetachChild(trailParentBone);
             _trailInitiated = false;
             if (IsEquipped()) {
@@ -345,7 +347,8 @@ void ThrowableRelicWeapon::RemoveTrail()
                 replacedProjectileModel.reset();
             }
         }
-        spdlog::debug("projectile trail deleted");
+        trailData.trailParentNode.reset();
+        spdlog::debug("{} projectile trail deleted", weap->GetFullName());
     }
 }
 
@@ -433,6 +436,7 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
         projectileHandle = *pHandlePtr;
         launchTime = AsyncUtil::GameTime::GetEngineTime();
         projectile = pHandlePtr->get().get();
+        projectile->inGameFormFlags.set(RE::TESForm::InGameFormFlag::kForcedPersistent);
         projState = ProjectileState::kLaunched;
 
         auto& rtData = projectile->GetProjectileRuntimeData();
@@ -487,42 +491,27 @@ bool ThrowableRelicWeapon::Throw(Thrower* a_thrower, const RotationType a_rotati
     //    droppedWeaponKeep.get().get()->SetObjectReference(WeaponThrowing::ThrowableWeaponContainer);
 //        WeaponThrowing::ThrowableWeaponContainer->SetModel(weap->GetModel());
         auto assets = Assets::GetSingleton();
-        if (auto containerRef = throwerActor->PlaceObjectAtMe(assets->ThrowableWeaponContainer, false).get(); containerRef) {
-            droppedWeaponKeep = containerRef->CreateRefHandle();
-            droppedWeaponKeep.get()->SetTemporary();
-            if (!droppedWeaponKeep.get()->IsDisabled())
-                droppedWeaponKeep.get()->Disable();
-
-            RE::ExtraUniqueID* xUID = nullptr;
-            RE::ExtraDataList* xDataList = nullptr;
-            auto inventory = throwerActor->GetInventory();
-            for (auto& [obj, entry] : inventory) {
-                if (obj == weap) {
-                    if (auto eData = entry.second.get()) {
-                        auto xLists = eData->extraLists;
-                        xDataList = xLists && !xLists->empty() ? xLists->front() : nullptr;
-                        xUID = xDataList ? xDataList->GetByType<RE::ExtraUniqueID>() : nullptr;
-                    //    auto xHotkey = xDataList ? xDataList->GetByType<RE::ExtraHotkey>() : nullptr;
-                    //    if (xHotkey && favoriteData && favoriteData != xHotkey) {
-                    //        favoriteData = RE::ExtraHotkey::Create<RE::ExtraHotkey>();
-                    //        favoriteData->hotkey = xHotkey->hotkey;
-                    //        spdlog::debug("hotkey copied again");
-                    //    } else if (!favoriteData) {
-                    //        favoriteData = RE::ExtraHotkey::Create<RE::ExtraHotkey>();
-                    //        favoriteData->hotkey = xHotkey->hotkey;
-                    //        spdlog::debug("hotkey copied");
-                    //    }
-                    }
-                }
+        if (!droppedWeaponKeep.get().get()) {
+            if (auto containerRef = throwerActor->PlaceObjectAtMe(assets->ThrowableWeaponContainer, true).get(); containerRef) {
+                droppedWeaponKeep = containerRef->CreateRefHandle();
+                droppedWeaponKeep.get()->inGameFormFlags.set(RE::TESForm::InGameFormFlag::kForcedPersistent);
+                if (!droppedWeaponKeep.get()->IsDisabled())
+                    droppedWeaponKeep.get()->Disable();
             }
+        }
+        if (droppedWeaponKeep.get().get()) {
 
             ObjectUtil::Actor::UnEquipItem(throwerActor, false, false, false, true, true, true);
             ObjectUtil::Actor::ResetEquipAnimationAfter(100, throwerActor);
 
-        //    currentReference = throwerActor->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kDropping, nullptr, nullptr).get().get();
+            RE::ExtraDataList* xDataList = ExtraDataUtil::FindExtraListWithUniqueID(throwerActor, weap);
+            if (!xDataList)
+                spdlog::warn("Throw: {} has no unique ID list, its identity may change after pickup!", weap->GetFullName());
+
+            currentReference = droppedWeaponKeep.get().get();
+            throwerActor->RemoveItem(weap, 1, RE::ITEM_REMOVE_REASON::kStoreInContainer, nullptr, droppedWeaponKeep.get().get());
+        //    currentReference = throwerActor->DropObject(weap, xDataList, 1, nullptr, nullptr).get().get();
         //    currentReference->Disable();
-            currentReference = throwerActor->DropObject(weap, xDataList, 1, nullptr, nullptr).get().get();
-            currentReference->Disable();
 
         //    currentReference->extraList.RemoveByType(RE::ExtraDataType::kHotkey);
 
@@ -548,8 +537,10 @@ void ThrowableRelicWeapon::OnEquip(BaseActor* a_actor)
     RelicWeapon::OnEquip(a_actor);
     if (a_actor && a_actor->IsValid()) {
         if (GetThrowState() != ThrowState::kArrived) {
+            RemoveTrail();
             replacedProjectileModel.reset();
         }
+        projectile = projectileHandle.get().get();
         if (projectile) {
             projectile->Kill();
             projectileHandle.reset();
@@ -679,7 +670,7 @@ void ThrowableRelicWeapon::UpdateProjectile(RE::Projectile* a_projectile, float 
 {
     auto projectileNode = a_projectile->Get3D2();
     if (!projectileNode) {
-    //    spdlog::warn("projectile's 3d not loaded");
+        spdlog::warn("projectile {}'s 3d not loaded", a_projectile->GetName());
         return;
     }
     if (projectileModel != projectileNode) {

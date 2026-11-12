@@ -19,7 +19,7 @@ void Caller::CallWeapon(SmartRelicWeapon* a_weaponToCall)
             //    }
             } else if (weaponToCall->Call(this, false)) {
                 RelicManager::GetSingleton()->OnRelicThrow(weaponToCall->projectile, weaponToCall);
-                spdlog::info("{} has successfuly called {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);
+                spdlog::info("{} has successfully called {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);
             } else {
                 spdlog::info("{} has failed to call {}", parent->GetActor()->GetName(), weaponToCall->weap->fullName);
             }
@@ -28,62 +28,77 @@ void Caller::CallWeapon(SmartRelicWeapon* a_weaponToCall)
         }
     }
 }
-RelicWeapon* Caller::GetCallableRelic()
+RelicWeapon* Caller::FindCallableRelic() const noexcept
+{
+    RelicWeapon* bestOption = nullptr;
+    if (const auto& knownRelics = parent->GetKnownRelics(); !knownRelics.empty()) {
+        for (const auto& relicID : knownRelics) {   //  the list starts from less recent relic to the most recent relic
+            auto relic = RelicManager::GetSingleton()->GetActiveRelic(relicID);
+            spdlog::debug("0");
+            if (!relic || !relic->HasAbility(RelicAbility::kCallable)) continue;
+            spdlog::debug("1");
+            auto owner = relic->GetOwner();
+            if (owner && owner == parent) {
+                if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>(); !relic->GetCarrier() && thrownRelic->projectile) {
+                    spdlog::debug("2");
+                    bestOption = relic;
+                    break;
+                } else if (auto wielder = relic->GetWielder()) {
+                    if (wielder == parent) {
+                        spdlog::error("WEIRD! Caller {} already equipping {}. This should never happen.", parent->GetActor()->GetName(), relic->weap->GetFullName());
+                        continue;
+                    } else if (alterationLevel > wielder->meleeSkill * 2.f) {
+                        spdlog::debug("3");
+                        bestOption = relic;
+                        break;
+                    }
+                } else {
+                    spdlog::error("WEIRD! {} is owned by {} and it's equipped. This should never happen.", relic->weap->GetFullName(), parent->GetActor()->GetName());
+                }
+            } else if (auto wielder = relic->GetWielder()) {
+                if (wielder == parent) {
+                    spdlog::error("WEIRD! Caller {} already equipping {}. This should never happen.", parent->GetActor()->GetName(), relic->weap->GetFullName());
+                    continue;
+                } else if (alterationLevel > wielder->meleeSkill * 3.f) {
+                    spdlog::debug("4");
+                    bestOption = relic;
+                    break;
+                }
+            } else if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>()) {
+                spdlog::debug("5");
+                if (!relic->GetCarrier() && thrownRelic->projectile) {
+                    bestOption = relic;
+                    break;
+                } else if (relic->GetCarrier() != parent) {
+                    bestOption = relic;
+                    continue;
+                } else if (relic->GetCarrier()) {
+                    bestOption = relic;
+                    continue;
+                }
+            } else {
+                spdlog::debug("6");
+                bestOption = relic;
+                continue;
+            }
+        }
+    } return bestOption;
+}
+RelicWeapon* Caller::GetCallableRelic() noexcept
 {
     _weaponToCall = nullptr;
     if (!parent) return nullptr;
     if (!parent->GetRightHandRelic()) {
         if (auto lastRelic = parent->GetLastRightHandRelic();
             lastRelic && !lastRelic->IsEquipped() &&
-            lastRelic->GetOwner() &&
-            lastRelic->GetOwner() == parent &&
+            lastRelic->GetCarrier() != parent &&
+        //    lastRelic->GetOwner() &&
+        //    lastRelic->GetOwner() == parent &&
             lastRelic->HasAbility(RelicAbility::kCallable))
         {
             _weaponToCall = lastRelic;
             spdlog::debug("{} is the callable weapon of {}.", lastRelic->weap->GetFullName(), parent->GetActor()->GetName());
-        } else if (const auto& knownRelics = parent->GetKnownRelics(); !knownRelics.empty()) {
-            for (const auto& relicID : knownRelics) {
-                auto relic = RelicManager::GetSingleton()->GetActiveRelic(relicID);
-                spdlog::debug("0");
-                if (!relic || !relic->HasAbility(RelicAbility::kCallable)) continue;
-                spdlog::debug("1");
-                auto owner = relic->GetOwner();
-                if (owner && owner == parent) {
-                    if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>(); !relic->GetCarrier() && thrownRelic->projectile) {
-                        spdlog::debug("2");
-                        _weaponToCall = relic;
-                        break;
-                    } else if (auto wielder = relic->GetWielder()) {
-                        if (wielder == parent) {
-                            spdlog::error("WEIRD! Caller {} already equipping {}. This should never happen.", parent->GetActor()->GetName(), relic->weap->GetFullName());
-                            continue;
-                        } else if (alterationLevel > wielder->meleeSkill * 2.f) {
-                            spdlog::debug("3");
-                            _weaponToCall = relic;
-                            break;
-                        }
-                    } else {
-                        spdlog::error("WEIRD! {} is not owned by {}, but it's equipped. This should never happen.", relic->weap->GetFullName(), parent->GetActor()->GetName());
-                    }
-                } else if (auto wielder = relic->GetWielder()) {
-                    if (wielder == parent) {
-                        spdlog::error("WEIRD! Caller {} already equipping {}. This should never happen.", parent->GetActor()->GetName(), relic->weap->GetFullName());
-                        continue;
-                    } else if (alterationLevel > wielder->meleeSkill * 3.f) {
-                        spdlog::debug("4");
-                        _weaponToCall = relic;
-                        break;
-                    }
-                } else if (const auto thrownRelic = relic->As<ThrowableRelicWeapon>(); !relic->GetCarrier() && thrownRelic->projectile) {
-                    spdlog::debug("5");
-                    _weaponToCall = relic;
-                    break;
-                } else {
-                    spdlog::debug("6");
-                    _weaponToCall = relic;
-                    continue;   //  try to find better options
-                }
-            }
+        } else if (_weaponToCall = FindCallableRelic(); _weaponToCall) {
             spdlog::error("{} is the callable weapon of {}.", _weaponToCall ? _weaponToCall->weap->GetFullName() : "null", parent->GetActor()->GetName());
         } else {
             spdlog::info("you don't have any relic weapon to call.");

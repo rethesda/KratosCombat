@@ -8,7 +8,7 @@ RelicWeapon::~RelicWeapon()
 RelicWeapon::RelicWeapon(RE::TESBoundObject* a_object)
     : weap(a_object->As<RE::TESObjectWEAP>())
 {
-    spdlog::warn("relic weapon constructed");
+    spdlog::debug("relic weapon constructed: {}", weap->GetFullName());
 }
 
 BaseActor* RelicWeapon::GetCarrier() const
@@ -16,10 +16,12 @@ BaseActor* RelicWeapon::GetCarrier() const
     if (wielder) return wielder;
     else if (lastWielder && lastWielder->IsValid()) {
         const auto invChanges = lastWielder->GetActor()->GetInventoryChanges();
-        const auto entries = invChanges->entryList;
-        for (const auto entry : *entries) {
-            if (entry && entry->object && entry->object == weap) {
-                return lastWielder;
+        const auto entries = invChanges ? invChanges->entryList : nullptr;
+        if (entries) {
+            for (const auto entry : *entries) {
+                if (entry && entry->object && entry->object == weap) {
+                    return lastWielder;
+                }
             }
         }
     } return nullptr;

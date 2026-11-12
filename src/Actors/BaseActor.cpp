@@ -62,11 +62,11 @@ void BaseActor::OnEquip(RelicWeapon* a_relic)
             SetLastRightHandRelic(a_relic);
             SetBarehanded(false);
 
-            if (knownRelics.empty()) {
+            auto it = std::find(knownRelics.begin(), knownRelics.end(), a_relic->relicIdentity);
+            if (it == knownRelics.end()) {
                 knownRelics.push_back(a_relic->relicIdentity);
             } else {
-                auto it = std::find(knownRelics.rbegin(), knownRelics.rend(), a_relic->relicIdentity);
-                if (it == knownRelics.rend()) knownRelics.push_back(a_relic->relicIdentity);
+                std::rotate(it, std::next(it), knownRelics.end());  //  for weapon calling stuff
             }
         } else {
             SetBarehanded(true);

@@ -164,9 +164,9 @@ void ArrivingState::UpdateArrivingDirection(const bool a_initial)
             arrivingRelativeAngleZ = MathUtil::Algebra::AttractToNearest(arrivingRelativeAngleZ, arrivingDirections, snapStrength);
 
         if (!a_initial) {
-            float previousAngle = 0.f;
+            float previousAngle = -69.f;
             if (callerActor->GetGraphVariableFloat("fArrivingWeaponDirection", previousAngle)) previousAngle *= TWO_PI;
-            if (previousAngle == 0.f) {
+            if (previousAngle == -69.f) {
                 spdlog::error("weird, could not get graph variable value!");
                 return;
             }

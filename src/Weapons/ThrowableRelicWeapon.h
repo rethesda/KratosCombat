@@ -154,6 +154,7 @@ public:
     [[nodiscard]] RE::Actor* GetThrowerActor();
     [[nodiscard]] ThrowState GetThrowState() const {return _throwState;}
     [[nodiscard]] RE::TESObjectREFR* GetWeaponContainer() const noexcept { return droppedWeaponKeep.get().get(); }
+
     [[nodiscard]] RE::NiTransform GetWorldTransform();
     [[nodiscard]] RE::NiTransform GetLocalTransform();
     [[nodiscard]] float GetLivingTime() const noexcept { return AsyncUtil::GameTime::GetEngineTime() - launchTime; }

@@ -1449,7 +1449,7 @@ void LeviathanAxe::Catch(const bool a_justDestroy, RE::Actor* a_actor)
 
         soundData.FadeArrivingNearSounds(469);
     //    soundData.FadeArrivingLoopSounds(469);
-        soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
+        soundData.StopArrivingLoopSounds(*g_deltaTime * 3200.f);
         soundData.PlayCatchingSounds(WeaponIdentify::RHandBone);
 
         if (WeaponIdentify::LeviathanAxe) {
@@ -3216,7 +3216,7 @@ void Mjolnir::Catch(const bool a_justDestroy, RE::Actor* a_actor)
 
         soundData.FadeArrivingNearSounds(469);
     //    soundData.FadeArrivingLoopSounds(469);
-        soundData.StopArrivingLoopSounds(*g_deltaTimeRealTime * 1200.f);
+        soundData.StopArrivingLoopSounds(*g_deltaTime * 3200.f);
         soundData.PlayCatchingSounds(WeaponIdentify::RHandBone);
 
         if (WeaponIdentify::Mjolnir) {

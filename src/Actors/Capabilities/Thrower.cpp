@@ -50,7 +50,7 @@ void Thrower::StopChargingThrow() noexcept
 {
     if (_isCharging) {
         if (cachedRelic) {
-            cachedRelic->GetSoundManager().StopChargingLoopSounds(*g_deltaTimeRealTime * 1200.f);
+            cachedRelic->GetSoundManager().StopChargingLoopSounds(*g_deltaTime * 3200.f);
             cachedRelic = nullptr;
         }
         _isCharging = false;

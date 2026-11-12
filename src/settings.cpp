@@ -1,5 +1,10 @@
 #include "settings.h"
-#include "MainKratosCombat.h"
+
+#ifdef KRATOS_COMBAT_3
+#else
+    #include "MainKratosCombat.h"
+#endif
+
 //#define DefaultConfigPath "Data\\MCM\\Config\\KratosCombat\\KratosCombat.ini"
 //#define UserConfigPath "Data\\MCM\\Settings\\KratosCombat\\KratosCombat.ini"
 
@@ -200,6 +205,8 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
     else if (DraupnirSpearCount < 1)    DraupnirSpearCount = 1;
     DraupnirSpearCount -= 1;                // DraupnirSpearCount starts with 0
 
+#ifdef KRATOS_COMBAT_3
+#else
     for (int i = Config::DraupnirSpearCount; i <= 9; i++) {
         if (Draupnir::DraupnirSpearProjectiles[i] != nullptr) {
             Draupnir::DraupnirSpearProjectiles[i] = nullptr;}
@@ -207,6 +214,7 @@ void Config::ReadConfig(std::filesystem::path a_path, const bool a_writeChanges)
             Draupnir::DraupnirSpearHitBones[i] = nullptr;}
         //  spdlog::debug("Draupnir spear {} is nullptr", i);
     }
+#endif
 
     if (ArrivalRoadCurveMagnitude > 100.f)  ArrivalRoadCurveMagnitude = 100.f;
     if (ArrivalRoadCurveMagnitude < -100.f) ArrivalRoadCurveMagnitude = -100.f;
@@ -281,6 +289,8 @@ bool Config::CheckForms()
     if (!gRageBarOpen || !gRageBarRot || !gRageBarPosX || !gRageBarPosY || !gRageBarScaleX || !gRageBarScaleY || !gRageBarTransparency)
         {spdlog::error("Can't find RageBar related globals"); found = false;}
 
+#ifdef KRATOS_COMBAT_3
+#else
     //  The Leviathan Axe's stuff
     auto Levi = LeviathanAxe::GetSingleton();
     found = Levi->Initialize();
@@ -313,6 +323,7 @@ bool Config::CheckForms()
     if (LeviathanAxeKWD && BladeOfChaosKWD && DraupnirSpearKWD && BladeOfOlympusKWD && GuardianShieldKWD)
         SpecialKWDs = {Config::LeviathanAxeKWD, Config::BladeOfChaosKWD, Config::DraupnirSpearKWD, Config::BladeOfOlympusKWD, Config::MjolnirKWD, Config::TridentKWD, Config::GuardianShieldKWD};
     else {spdlog::error("Check Kratos's keyword addresses"); found = false;}
+#endif
 
     return found;
 }

@@ -22,7 +22,7 @@ public:
     static constexpr std::uint32_t kRecordRelics = 'RELC';
     static constexpr std::uint32_t kRecordActors = 'ACTR';
 
-    static constexpr std::uint32_t kRelicsVersion = 1;
+    static constexpr std::uint32_t kRelicsVersion = 3;
     static constexpr std::uint32_t kActorsVersion = 1;
 
     static constexpr std::uint32_t kMinRelicsVersion = 1;
@@ -41,7 +41,7 @@ public:
     struct SavedRelic
     {
         SavedRelicKey key;
-    //    RE::FormID owner  = 0x0;  //  todo
+        RE::FormID owner  = 0x0;
         std::uint8_t type = (std::uint8_t)RelicType::kNone;
     };
     struct SavedActor
@@ -75,23 +75,39 @@ public:
         return static_cast<RE::FormID>(a_relic.relicIdentity >> 16);
     }
 
-    std::optional<RelicIdentity> GetRelicIdentity(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    std::optional<RelicIdentity> GetRelicIdentity(RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraList = nullptr)
     {
         if (!a_actor || !a_object) return std::nullopt;
 
         const RE::FormID formID = a_object->formID;
         if (formID == 0x0) return std::nullopt;
 
-        auto uniqueID = GetUniqueID(a_actor, a_object);
-        if (!uniqueID || *uniqueID == 0x0) return std::nullopt;
+        RE::ExtraDataList* xList = a_extraList ? a_extraList : ExtraDataUtil::FindBaseExtraList(a_actor, a_object);
 
-        return MakeRelicIdentity(formID, *uniqueID);
+        if (xList) {
+            if (auto xUID = xList->GetByType<RE::ExtraUniqueID>(); xUID && xUID->uniqueID != 0x0 && xUID->pad16 == 6969u)
+                return MakeRelicIdentity(formID, xUID->uniqueID);
+        }
+
+        if (auto uniqueID = GetUniqueID(a_actor, a_object, 6969u).value_or(0x0); uniqueID != 0x0)
+            return MakeRelicIdentity(formID, uniqueID);
+
+        {
+            ReadLocker lock(activeRelicsMapLock);
+            for (const auto& [identity, relic] : activeRelics) {
+                if (relic && GetRelicBaseFormID(*relic) == formID)
+                    return identity;
+            }
+        }
+
+        spdlog::debug("GetRelicIdentity: no identity for {} ({:x})", a_object->GetName(), formID);
+        return std::nullopt;
     }
     std::optional<RelicIdentity> GetOrCreateEquippedRelicIdentity(RE::Actor* a_actor, const bool a_isLeft = false)
     {
         if (!a_actor) return std::nullopt;
 
-        auto* ieData = a_actor->GetEquippedEntryData(a_isLeft);
+        auto ieData = a_actor->GetEquippedEntryData(a_isLeft);
         if (!ieData || !ieData->object) return std::nullopt;
 
         auto* obj    = ieData->object;
@@ -99,6 +115,7 @@ public:
         if (formID == 0) return std::nullopt;
 
         if (auto existing = GetRelicIdentity(a_actor, obj)) {
+            spdlog::debug("{} found existing relicID {:08x}", a_actor->GetName(), existing.value());
             return existing;
         }
 
@@ -108,23 +125,34 @@ public:
         uint16_t nextUID = changes->GetNextUniqueID();
         if (nextUID == 0x0) return std::nullopt;
 
-        auto xList = ieData->extraLists ? ieData->extraLists->front() : nullptr;
-    //    auto xList = CreateExtraDataList();
+        auto xList = ExtraDataUtil::FindBaseExtraList(a_actor, obj);
         if (!xList) return std::nullopt;
+        spdlog::debug("xList count: {}", ieData->extraLists->size());
+
+        if (!xList) return std::nullopt;
+        else spdlog::debug("xList found: {}");
 
         auto xUID = RE::BSExtraData::Create<RE::ExtraUniqueID>();
         if (!xUID) return std::nullopt;
 
         xUID->baseID   = formID;
         xUID->uniqueID = nextUID;
-    //    xUID->pad16 = 69u;
+        xUID->pad16 = 6969u;
         xList->Add(xUID);
-    //    ieData->extraLists->pop_front();
-    //    ieData->AddExtraList(xList);
-    //    ieData->AddExtraList(xListCurrent);
 
         return MakeRelicIdentity(formID, nextUID);
     }
+
+    RelicType GetRelicType(RE::Actor* a_actor, RE::TESBoundObject* a_weapon)
+    {
+        if (auto identity = GetRelicIdentity(a_actor, a_weapon)) {
+            auto it = activeRelics.find(identity.value());
+            if (it != activeRelics.end() && it->second)
+                return it->second->GetType();
+        }
+        return RelicType::kNone;
+    }
+
     SavedRelicKey MakeSavedRelicKey(const RelicWeapon& a_relic)
     {
         return {GetRelicBaseFormID(a_relic), GetRelicUniqueID(a_relic)};
@@ -211,8 +239,7 @@ public:
             return;
         }
         switch (kRelicsVersion) {
-        case 1: WriteRelicsV1(a_intfc); break;
-        //  case 2: WriteRelicsV2(a_intfc); break;
+        case 3: WriteRelicsV3(a_intfc); break;
         default: break;
         }
 
@@ -251,7 +278,8 @@ public:
                             if (auto thrownWeapon = rRelic ? rRelic->As<ThrowableRelicWeapon>() : nullptr) {
                                 if (thrownWeapon->projectile) {
                                     thrownRelics.erase(thrownWeapon->projectile);
-                                    thrownWeapon->projectile->Kill();
+                                    if (thrownWeapon->projectileHandle.get().get() == thrownWeapon->projectile)
+                                        thrownWeapon->projectile->Kill();
                                     thrownWeapon->projectileModel = nullptr;
                                     thrownWeapon->projectileHandle.reset();
                                     thrownWeapon->projectile = nullptr;
@@ -304,14 +332,14 @@ public:
             GetPlayer()->OnEquip(relic);
         }
     }
-    void OnPickUp(RE::Actor* a_actor, RE::TESBoundObject* a_object, std::int32_t a_count, RE::TESObjectREFR* a_fromRefr)
+    void OnPickUp(RE::Actor* a_actor, RE::TESBoundObject* a_object, std::int32_t a_count, RE::TESObjectREFR* a_fromRefr, RE::ExtraDataList* a_extraList)
     {
         if (!a_actor || !Config::SpecialWeapon) return;
         if (!a_object || !a_object->IsWeapon()) return;
 
-        auto relicID = GetRelicIdentity(a_actor, a_object->As<RE::TESObjectWEAP>()).value_or(0x0);
+        auto relicID = GetRelicIdentity(a_actor, a_object->As<RE::TESObjectWEAP>(), a_extraList).value_or(0x0);
         if (relicID == 0x0) {
-            spdlog::warn("OnPickUp: relic ID is not valid");
+            spdlog::warn("OnPickUp: {} relic ID is not valid", a_object->GetName());
             return;
         }
 
@@ -340,7 +368,7 @@ public:
             spdlog::info("{} type relic {} picked up by {}", (uint8_t)activeRelic->GetType(), activeRelic->weap->GetFullName(), a_actor->GetName());
         }
     }
-    void OnEquip(RE::Actor* a_actor, RE::TESBoundObject* a_object)
+    void OnEquip(RE::Actor* a_actor, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraList)
     {
         if (!a_actor || !Config::SpecialWeapon) return;
         if (!a_object || !a_object->IsWeapon()) return;
@@ -369,9 +397,9 @@ public:
         auto lWeapon = lObject ? lObject->As<RE::TESObjectWEAP>() : nullptr;
 
         if (rWeapon == a_object) {
-            auto relicID = GetOrCreateEquippedRelicIdentity(a_actor, false).value_or(0x0);
+            auto relicID = GetRelicIdentity(a_actor, rWeapon, a_extraList).value_or(0x0);
             if (relicID == 0x0) {
-                spdlog::warn("relic ID is not valid");
+                spdlog::warn("{} relic ID is not valid", rWeapon->GetFullName());
                 return;
             }
 
@@ -424,7 +452,7 @@ public:
         if (activeActor && activeActor->IsValid())
             activeActor->OnEquip(activeRelic);
     }
-    void OnUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object, const RE::BGSEquipSlot* a_slotToReplace)
+    void OnUnequip(RE::Actor* a_actor, RE::TESBoundObject* a_object, const RE::BGSEquipSlot* a_slotToReplace, RE::ExtraDataList* a_extraList)
     {
         if (!a_actor || !Config::SpecialWeapon) return;
         if (!a_object || !a_object->IsWeapon()) return;
@@ -448,7 +476,7 @@ public:
         auto lWeapon = lObject ? lObject->As<RE::TESObjectWEAP>() : nullptr;
 
         if (rWeapon == a_object) {
-            auto relicID = GetRelicIdentity(a_actor, rWeapon).value_or(0x0);
+            auto relicID = GetRelicIdentity(a_actor, rWeapon, a_extraList).value_or(0x0);
             if (relicID == 0x0) {
                 spdlog::warn("OnUnequip: {} is not relic", rWeapon->GetFullName());
                 activeActor->OnEquip(nullptr);
@@ -805,6 +833,31 @@ private:
             relic->relicIdentity = identity;
             relic->currentReference = nullptr;  //  actually not necessary, maybe I will delete it from the class
 
+            if (saved.owner != 0x0) {
+                RE::FormID resolvedOwnerID = 0;
+                if (a_serialization->ResolveFormID(saved.owner, resolvedOwnerID)) {
+                    if (auto* form = RE::TESForm::LookupByID(resolvedOwnerID); form) {
+                        if (auto* ownerActor = form->As<RE::Actor>(); ownerActor) {
+                            auto* ownerBase = ownerActor->IsPlayerRef()
+                                ? GetOrInitializePlayer()
+                                : GetOrCreateActiveActor(ownerActor->GetHandle());
+                            if (ownerBase) {
+                                relic->SetOwner(ownerBase);
+                                spdlog::debug("relic {:x} owner restored: {}", identity, ownerActor->GetName());
+                            } else {
+                                spdlog::warn("RestoreRelics: owner {} could not be wrapped into a BaseActor", ownerActor->GetName());
+                            }
+                        } else {
+                            spdlog::warn("RestoreRelics: owner form {:x} is not an actor", resolvedOwnerID);
+                        }
+                    } else {
+                        spdlog::warn("RestoreRelics: owner form {:x} could not be looked up", resolvedOwnerID);
+                    }
+                } else {
+                    spdlog::warn("RestoreRelics: owner form id {:x} could not be resolved", saved.owner);
+                }
+            }
+
             activeRelics.emplace(identity, std::move(relic));
         }
 
@@ -921,6 +974,29 @@ private:
             savedRelics.push_back(std::move(saved));
         }
     }
+    void ReadRelicsV3(SKSE::SerializationInterface* a_intfc)
+    {
+        std::uint32_t count = 0;
+        if (!a_intfc->ReadRecordData(count) || count > 65536) {
+            ClearSavedState();
+            return;
+        }
+
+        savedRelics.clear();
+        savedRelics.reserve(count);
+
+        for (std::uint32_t i = 0; i < count; i++) {
+            SavedRelic saved;
+            if (!ReadRelicKey(a_intfc, saved.key) ||
+                !a_intfc->ReadRecordData(saved.type) ||
+                !a_intfc->ReadRecordData(saved.owner)) {
+                ClearSavedState();
+                return;
+            }
+            if (saved.key.baseFormID == 0 || saved.key.uniqueID == 0) continue;
+            savedRelics.push_back(std::move(saved));
+        }
+    }
     void ReadActorsV1(SKSE::SerializationInterface* a_intfc)
     {
         std::uint32_t count = 0;
@@ -998,6 +1074,33 @@ private:
             if (!a_intfc->WriteRecordData(key.baseFormID) ||
                 !a_intfc->WriteRecordData(key.uniqueID) ||
                 !a_intfc->WriteRecordData((std::uint8_t)relic->GetType()))
+            {
+                return;
+            }
+        }
+    }
+    void WriteRelicsV3(SKSE::SerializationInterface* a_intfc)
+    {
+        std::uint32_t relicCount = 0;
+        for (const auto& [identity, relic] : activeRelics) {
+            if (relic) relicCount++;
+        }
+
+        if (!a_intfc->WriteRecordData(relicCount)) return;
+
+        for (const auto& [identity, relic] : activeRelics) {
+            if (!relic) continue;
+
+            const auto key = MakeSavedRelicKey(*relic);
+
+            RE::FormID ownerFormID = 0x0;
+            if (auto* ownerBase = relic->GetOwner(); ownerBase && ownerBase->GetActor())
+                ownerFormID = ownerBase->GetActor()->formID;
+
+            if (!a_intfc->WriteRecordData(key.baseFormID) ||
+                !a_intfc->WriteRecordData(key.uniqueID) ||
+                !a_intfc->WriteRecordData((std::uint8_t)relic->GetType()) ||
+                !a_intfc->WriteRecordData(ownerFormID))
             {
                 return;
             }
@@ -1102,6 +1205,7 @@ private:
 
         switch (a_version) {
         case 1: ReadRelicsV1(a_intfc); break;
+        case 3: ReadRelicsV3(a_intfc); break;
 
         default:
             spdlog::warn("unknown relics version {}, skipping", a_version);

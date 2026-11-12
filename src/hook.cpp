@@ -918,10 +918,10 @@ bool PlayerHook::SkipAnim(RE::PlayerCharacter* a_this, bool a_playAnim)
 void NPCHook::AddObjectToContainer(RE::Actor* a_this, RE::TESBoundObject* a_object, RE::ExtraDataList* a_extraList, std::int32_t a_count, RE::TESObjectREFR* a_fromRefr)
 {
     spdlog::warn("{} {} picked up by {}", a_object->GetName(), a_object->formID, a_this->GetName());
-#ifdef KRATOS_COMBAT_3
-    RelicManager::GetSingleton()->OnPickUp(a_this, a_object, a_count, a_fromRefr);
-#endif
     _AddObjectToContainer(a_this, a_object, a_extraList, a_count, a_fromRefr);
+#ifdef KRATOS_COMBAT_3
+    RelicManager::GetSingleton()->OnPickUp(a_this, a_object, a_count, a_fromRefr, a_extraList);
+#endif
 }
 
 void ActorEquipManagerHook::EquipObject(
@@ -944,7 +944,7 @@ void ActorEquipManagerHook::EquipObject(
 //        a_object ? a_object->GetFormID() : 0
 //    );
 
-    RelicManager::GetSingleton()->OnEquip(a_actor, a_object);
+    RelicManager::GetSingleton()->OnEquip(a_actor, a_object, a_extraData);
 #endif
 
 }
@@ -968,7 +968,7 @@ void ActorEquipManagerHook::UnequipObject(
 //        a_object ? a_object->GetFormID() : 0
 //    );
 
-    RelicManager::GetSingleton()->OnUnequip(a_actor, a_object, a_slotToReplace);
+    RelicManager::GetSingleton()->OnUnequip(a_actor, a_object, a_slotToReplace, a_extraData);
 #endif
     _UnequipObject(a_manager, a_actor, a_object, a_extraData, a_count, a_slot, a_queueEquip, a_forceEquip, a_playSounds, a_applyNow, a_slotToReplace);
 

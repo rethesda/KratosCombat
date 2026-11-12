@@ -66,8 +66,12 @@ void Mjolnir::SetState(RelicWeaponState::Type a_type)
     case RelicWeaponState::Type::kHoming:
         SmartRelicWeapon::SetState(std::make_unique<MjolnirHomingState>(*this));
         break;
+    case RelicWeaponState::Type::kNone:
+        SmartRelicWeapon::SetState(nullptr);
+        break;
 
     default:
+        SmartRelicWeapon::SetState(nullptr);
         break;
     }
 }

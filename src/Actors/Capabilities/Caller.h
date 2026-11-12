@@ -21,7 +21,8 @@ public:
 
     [[nodiscard]] ActorType GetType() const override { return ActorType::kCaller; }
 
-    RelicWeapon* GetCallableRelic();
+    [[nodiscard]] RelicWeapon* FindCallableRelic() const noexcept;
+    [[nodiscard]] RelicWeapon* GetCallableRelic() noexcept;
     void CallWeapon(SmartRelicWeapon* a_weaponToCall = nullptr);
 
 protected:
